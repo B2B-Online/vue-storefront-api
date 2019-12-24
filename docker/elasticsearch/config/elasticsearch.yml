@@ -14,3 +14,5 @@ discovery.zen.minimum_master_nodes: 1
 ## see https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
 #
 discovery.type: single-node
+#node.max_local_storage_nodes: 10
+thread_pool.bulk.queue_size: 1000

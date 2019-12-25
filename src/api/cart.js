@@ -7,7 +7,8 @@ export default ({ config, db }) => {
 	let cartApi = Router();
 	
 	const _getProxy = (req) => {
-		const platform = config.platform
+		//const platform = config.platform
+		const platform = 'b2b'
 		const factory = new PlatformFactory(config, req)
 		return factory.getAdapter(platform,'cart')
 	};

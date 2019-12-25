@@ -15,4 +15,4 @@ discovery.zen.minimum_master_nodes: 1
 #
 discovery.type: single-node
 #node.max_local_storage_nodes: 10
-thread_pool.bulk.queue_size: 1000
+thread_pool.bulk.queue_size: 10000

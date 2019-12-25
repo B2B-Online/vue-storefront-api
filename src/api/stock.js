@@ -6,7 +6,7 @@ export default ({ config, db }) => {
 	let api = Router();
 
 	const _getProxy = (req) => {
-		const platform = config.platform
+		const platform = 'b2b'
 		const factory = new PlatformFactory(config, req)
 		return factory.getAdapter(platform, 'stock')
 	};
@@ -48,10 +48,12 @@ export default ({ config, db }) => {
 			return apiStatus(res, 'sku parameter is required', 500);
 		}
 
-		stockProxy.check({
+		const p = stockProxy.check({
 			sku: req.query.sku,
 			stockId: config.msi.enabled ? (req.query.stockId ? req.query.stockId : _getStockId(req.query.storeCode)) : null
-		}).then((result) => {
+		});
+		
+		p.then((result) => {
 			apiStatus(res, result, 200);
 		}).catch(err => {
 			apiStatus(res, err, 500);

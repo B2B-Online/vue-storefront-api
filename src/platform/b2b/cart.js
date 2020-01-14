@@ -1,8 +1,8 @@
-
 import AbstractCartProxy from '../abstract/cart'
 import { multiStoreConfig } from './util'
 import rp from 'request-promise-native';
 import e, { response } from 'express';
+import RedisCache from './redis';
 /**
  * Specification https://github.com/DivanteLtd/storefront-integration-sdk/blob/tutorial/Dynamic%20API%20specification.md
  */
@@ -11,53 +11,8 @@ class CartProxy extends AbstractCartProxy {
       super(config, req)
       this.config = require('config');
       this.redis = require('redis');
+      this.redisCache = new RedisCache();
     }
-
-    saveInRedis (sessionId, cartId) {
-      let redisClient = this.redis.createClient(this.config.redis);
-      redisClient.on('error', function (err) {
-        redisClient = this.redis.createClient(this.config.redis);
-      });
-
-      if (this.config.redis.auth) {
-        redisClient.auth(this.config.redis.auth);
-      }
-
-      redisClient.set("cart_" + cartId, JSON.stringify({
-        session: sessionId,
-        created_at: new Date(),
-      }));
-    }
-
-    findSession(cartId, successCallback, errorCallback) {
-      let redisClient = this.redis.createClient(this.config.redis);
-      redisClient.on('error', function (err) {
-        redisClient = this.redis.createClient(this.config.redis);
-      });
-      
-      if (this.config.redis.auth) {
-        redisClient.auth(this.config.redis.auth);
-      }
-      const key = "cart_" + cartId;
-      redisClient.get(key, (err, value) => {
-        if(value) {
-          successCallback(value);
-        } else {
-          errorCallback(err);
-        }
-      });
-    }
-
-    findSessionWrapper(cartId) {
-      const that = this;
-      return new Promise((resolve, reject) => {
-        that.findSession(cartId, (successResponse) => {
-              resolve(successResponse);
-          }, (errorResponse) => {
-              reject(errorResponse)
-          });
-      });
-   }
 
     create (customerToken) {
       const options = {
@@ -86,7 +41,7 @@ class CartProxy extends AbstractCartProxy {
      return  rp(options)
      .then(function (resp) {
         const json = JSON.parse(resp);         
-       that.saveInRedis(json.session, json.cart_id);   
+       that.redisCache.cacheCartId(json.session, json.cart_id);   
        return new Promise((resolve, reject) => {
          resolve(json.cart_id);
        })
@@ -115,7 +70,7 @@ class CartProxy extends AbstractCartProxy {
     };
 
     if(!token) {               
-       const res = await this.findSessionWrapper(cartId);
+       const res = await this.redisCache.findSessionWrapper(cartId);
        options.qs.session_key = JSON.parse(res).session;
     } else {
       options.qs.user_id = customerToken;
@@ -139,16 +94,16 @@ class CartProxy extends AbstractCartProxy {
         resolve(basket);
       })
     }).catch(function (err) {
-      console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);  
+      console.error('Error during call: https://cartapi.systemb2b.pl/api/get_or_create_cart/gci/1078', err);  
       reject();     
     }); 
 
   }
 
-  update (customerToken, cartId, cartItem) {
+  async update (customerToken, cartId, cartItem) {
     const options = {
-      uri: 'https://cartapi.systemb2b.pl/api/get_or_create_cart/gci/1078',
-      method: 'GET',
+      uri: 'https://cartapi.systemb2b.pl/api/update_product/gci/1078',
+      method: 'PUT',
       headers: {
         'User-Agent': 'Request-Promise'
       },
@@ -161,15 +116,41 @@ class CartProxy extends AbstractCartProxy {
    };
 
    if(!token) {               
-     const res = await this.findSessionWrapper(cartId);
+     const res = await this.redisCache.findSessionWrapper(cartId);
      options.qs.session_key = JSON.parse(res).session;
    } else {
      options.qs.user_id = customerToken;
    }
-   //product_id=311340&quantity=1&customer_code=&variant_id=252245
+   const itemId = this.redisCache.findProductId(cartItem.sku);
+   if(!itemId) {     
     return new Promise((resolve, reject) => {
-        resolve([]);
-      })        
+      reject(`Missing product for sku ${cartItem.sku}`);
+    }); 
+   }
+   options.qs.product_id = itemId;
+   options.qs.quantity = cartItem.qty;
+   //product_id=311340&quantity=1&customer_code=&variant_id=252245
+    
+   return  rp(options).then(function (resp) {      
+    const prod = resp.products.filter(prod => prod.product_id === itemId);
+    const result = {
+      "item_id": itemId,
+      "sku": cartItem.sku,
+      "qty": prod.quantity,
+      "name":prod.name,
+      "price":prod.unit_price,
+      "product_type":"simple",
+      "quote_id":"" //TODO - how to set
+    };
+                   
+    return new Promise((resolve, reject) => {
+      resolve(result);
+    });
+
+  }).catch(function (err) {
+    console.error('Error during call: https://cartapi.systemb2b.pl/api/update_product/gci/1078', err);  
+    reject();     
+  }); 
   }
   
     applyCoupon (customerToken, cartId, coupon) {

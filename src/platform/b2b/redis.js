@@ -1,52 +1,46 @@
+import rp from 'request-promise-native';
 class RedisCache {
+    
     constructor () {    
         this.config = require('config');
         this.redis = require('redis');
-    }
-
-    cacheCartId (sessionId, cartId) {
-        let redisClient = this.redis.createClient(this.config.redis);
-        redisClient.on('error', function (err) {
-          redisClient = this.redis.createClient(this.config.redis);
+        let rc = this.redis.createClient(this.config.redis);
+        rc.on('error', function (err) {
+          rc = this.redis.createClient(this.config.redis);
         });
   
         if (this.config.redis.auth) {
-          redisClient.auth(this.config.redis.auth);
+          rc.auth(this.config.redis.auth);
         }
-  
-        redisClient.set("cart_" + cartId, JSON.stringify({
+        this.redisClient = rc;
+    }
+
+
+
+    cacheCartId (sessionId, cartId) {        
+        this.redisClient.set("cart_" + cartId, JSON.stringify({
           session: sessionId,
           created_at: new Date(),
         }));
     }
 
     cacheProductId (sku, id) {
-        let redisClient = this.redis.createClient(this.config.redis);
-        redisClient.on('error', function (err) {
-          redisClient = this.redis.createClient(this.config.redis);
-        });
-  
-        if (this.config.redis.auth) {
-          redisClient.auth(this.config.redis.auth);
-        }
-  
-        redisClient.set("product_" + sku, JSON.stringify({
+        this.redisClient.set("product_" + sku, JSON.stringify({
           item_id: id,
           created_at: new Date(),
         }));
     }
 
+    cacheBasket(cartId, cartItems) {
+      this.redisClient.set("basket_" + cartId, JSON.stringify({
+        items: cartItems,
+        created_at: new Date(),
+      }));
+    }
+
     findSession(cartId, successCallback, errorCallback) {
-        let redisClient = this.redis.createClient(this.config.redis);
-        redisClient.on('error', function (err) {
-          redisClient = this.redis.createClient(this.config.redis);
-        });
-        
-        if (this.config.redis.auth) {
-          redisClient.auth(this.config.redis.auth);
-        }
         const key = "cart_" + cartId;
-        redisClient.get(key, (err, value) => {
+        this.redisClient.get(key, (err, value) => {
           if(value) {
             successCallback(value);
           } else {
@@ -56,20 +50,24 @@ class RedisCache {
       }
 
       findProductId(sku, successCallback, errorCallback) {
-        let redisClient = this.redis.createClient(this.config.redis);
-        redisClient.on('error', function (err) {
-          redisClient = this.redis.createClient(this.config.redis);
-        });
-        
-        if (this.config.redis.auth) {
-          redisClient.auth(this.config.redis.auth);
-        }
-        const key = "sku_" + cartId;
-        redisClient.get(key, (err, value) => {
+        const key = "sku_" + sku;
+        this.redisClient.get(key, (err, value) => {
           if(value) {
             successCallback(value);
-          } else {
-            errorCallback(err);
+          } else {                                          
+              const options = {
+                  uri: 'https://b2bapieu.planetb2b.com/api/product/symbol/'+sku+'/?cache=false&format=json&frontend_id=3&gci=1078',
+                  headers: {
+                      'User-Agent': 'Request-Promise'
+                  },
+                  json: true
+              };
+              rp(options).then(function (repos) {
+                successCallback(repos[0].pk);
+              }).catch(function (err) {
+                console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);
+                
+              });
           }
         });
       }

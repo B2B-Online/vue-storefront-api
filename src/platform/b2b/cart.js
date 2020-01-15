@@ -21,13 +21,9 @@ class CartProxy extends AbstractCartProxy {
         headers: {
             'User-Agent': 'Request-Promise'
         },
-        //json: true,
-        //timeout: 15000,
         qs: {
-          //user_id : "9b06dc1de20040a6822dabbd29797b1c",
           format: "json",
           title: "default",
-          //session_key: "test123"
         }
      };
      
@@ -80,14 +76,14 @@ class CartProxy extends AbstractCartProxy {
       const basket = [];
       resp.products.forEach(item => {
         basket.push({
-          //"item_id": 66257,
-          //"sku": "WS08-M-Black",
-          //"qty": 1,
-          //"name": "Minerva LumaTech&trade; V-Tee",
-          //"price": 32,
-          //"product_type": "configurable",
-          //"quote_id": "dceac8e2172a1ff0cfba24d757653257",    
-          //"product_option": { }
+          "item_id": item.product_id,
+          "sku": item.symbol,
+          "qty": item.quantity,
+          "name": item.name,
+          "price": item.unit_price,
+          "product_type": "configurable",
+          "quote_id": "",    
+          "product_option": { }
         })
       });               
       return new Promise((resolve, reject) => {
@@ -100,18 +96,17 @@ class CartProxy extends AbstractCartProxy {
 
   }
 
-  async update (customerToken, cartId, cartItem) {
+  async update (token, cartId, cartItem) {
+    const updateProductUrl = "https://cartapi.systemb2b.pl/api/update_product/gci/1078/";
+    const addProductUrl = "https://cartapi.systemb2b.pl/api/add_product/gci/1078/";
     const options = {
-      uri: 'https://cartapi.systemb2b.pl/api/update_product/gci/1078',
+      uri: addProductUrl,
       method: 'PUT',
       headers: {
         'User-Agent': 'Request-Promise'
       },
       json: true,
-      //timeout: 15000,
       qs: {       
-        format: "json",
-        title: "default",
       }
    };
 
@@ -121,7 +116,7 @@ class CartProxy extends AbstractCartProxy {
    } else {
      options.qs.user_id = customerToken;
    }
-   const itemId = this.redisCache.findProductId(cartItem.sku);
+   const itemId = await this.redisCache.findProductIdWrapper(cartItem.sku);
    if(!itemId) {     
     return new Promise((resolve, reject) => {
       reject(`Missing product for sku ${cartItem.sku}`);
@@ -132,14 +127,15 @@ class CartProxy extends AbstractCartProxy {
    //product_id=311340&quantity=1&customer_code=&variant_id=252245
     
    return  rp(options).then(function (resp) {      
-    const prod = resp.products.filter(prod => prod.product_id === itemId);
+    const prod = resp.products.filter(prod => prod.product_id === itemId)[0];
+
     const result = {
       "item_id": itemId,
       "sku": cartItem.sku,
       "qty": prod.quantity,
       "name":prod.name,
       "price":prod.unit_price,
-      "product_type":"simple",
+      "product_type":"configurable",
       "quote_id":"" //TODO - how to set
     };
                    
@@ -153,43 +149,63 @@ class CartProxy extends AbstractCartProxy {
   }); 
   }
   
-    applyCoupon (customerToken, cartId, coupon) {
+
+  
+
+    async delete (token, cartId, cartItem) {
+      
+      const options = {
+        uri: 'https://cartapi.systemb2b.pl/api/remove_product/gci/1078/',
+        method: 'PUT',
+        headers: {
+          'User-Agent': 'Request-Promise'
+        },
+        json: true,
+        qs: {  
+          product_id: cartItem.item_id     
+         }
+       };
+                     
+       const res = await this.redisCache.findSessionWrapper(cartId);
+       options.qs.session_key = JSON.parse(res).session;
+       if(token) { 
+         options.qs.user_id =token;
+       }
+       return  rp(options).then(function (resp) {
+          return new Promise((resolve, reject) => {
+              resolve();
+          });
+        }).catch(function (err) {
+          console.error('Error during call delete: https://cartapi.systemb2b.pl/api/remove_product/gci/1078/', err);     
+        });
+      
+    }
+
+    applyCoupon (token, cartId, coupon) {
       return new Promise((resolve, reject) => {
         resolve([]);
       })     
     }
   
-    deleteCoupon (customerToken, cartId) {
+    deleteCoupon (token, cartId) {
       return new Promise((resolve, reject) => {
         resolve([]);
       })     
     }
   
-    getCoupon (customerToken, cartId) {
+    getCoupon (token, cartId) {
         return new Promise((resolve, reject) => {
           resolve([]);
         })     
     }
-  
 
-    delete (customerToken, cartId, cartItem) {
-        
-      return new Promise((resolve, reject) => {
-            resolve({
-                "code": 200,
-                "result": cartId
-              });
-      })     
-    }
-
-  
-    totals (customerToken, cartId, params) {
+    totals (token, cartId, params) {
       return new Promise((resolve, reject) => {
         resolve([]);
       });     
     }
 
-    getShippingMethods (customerToken, cartId, address) {
+    getShippingMethods (token, cartId, address) {
         const result = [
           {
             "carrier_code":"flatrate",
@@ -220,7 +236,7 @@ class CartProxy extends AbstractCartProxy {
           });         
     }
     
-    getPaymentMethods (customerToken, cartId) {
+    getPaymentMethods (token, cartId) {
         const result = {
           "payment_methods":[
               {
@@ -238,7 +254,7 @@ class CartProxy extends AbstractCartProxy {
         });   
     }
     
-    setShippingInformation (customerToken, cartId, address) {
+    setShippingInformation (token, cartId, address) {
         const result = {
           "payment_methods":[
             {

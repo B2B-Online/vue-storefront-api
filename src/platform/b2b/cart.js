@@ -71,7 +71,7 @@ class CartProxy extends AbstractCartProxy {
     } else {
       options.qs.user_id = customerToken;
     }
-    
+    const that = this;
     return  rp(options).then(function (resp) {      
       const basket = [];
       resp.products.forEach(item => {
@@ -85,7 +85,8 @@ class CartProxy extends AbstractCartProxy {
           "quote_id": "",    
           "product_option": { }
         })
-      });               
+      });  
+      that.redisCache.cacheBasket(cartId, basket);             
       return new Promise((resolve, reject) => {
         resolve(basket);
       })
@@ -117,6 +118,11 @@ class CartProxy extends AbstractCartProxy {
      options.qs.user_id = customerToken;
    }
    const itemId = await this.redisCache.findProductIdWrapper(cartItem.sku);
+   const hasItem = await this.redisCache.hasBasketItemWrapper(cartId, itemId)
+   if(hasItem) {
+      options.uri = updateProductUrl;
+   }
+   
    if(!itemId) {     
     return new Promise((resolve, reject) => {
       reject(`Missing product for sku ${cartItem.sku}`);

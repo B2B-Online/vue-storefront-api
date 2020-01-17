@@ -38,6 +38,19 @@ class RedisCache {
       }));
     }
 
+    hasBasketItem(cartId, itemId, successCallback, errorCallback) {
+      const key = "basket_" + cartId;
+      this.redisClient.get(key, (err, value) => {
+        if(value) {
+          const obj = JSON.parse(value);
+          const result = obj.items.filter(item => item.item_id === itemId).length > 0;
+          successCallback(result);
+        } else {
+          errorCallback(err);
+        }
+      });
+    }
+
     findSession(cartId, successCallback, errorCallback) {
         const key = "cart_" + cartId;
         this.redisClient.get(key, (err, value) => {
@@ -93,6 +106,17 @@ class RedisCache {
             });
         });
      }
+
+     hasBasketItemWrapper(cartId, itemId) {
+      const that = this;
+      return new Promise((resolve, reject) => {
+        that.hasBasketItem(cartId, itemId, (successResponse) => {
+            resolve(successResponse);
+          }, (errorResponse) => {
+            reject(errorResponse)
+          });
+      });
+   }
   
 }
 module.exports = RedisCache;

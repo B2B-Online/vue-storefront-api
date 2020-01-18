@@ -9,6 +9,8 @@ const jwa = require('jwa');
 const hmac = jwa('HS256');
 
 const _getProxy = (req, config) => {
+	//TODO change in config when all apis will be megrated on b2b platform
+	//const platform = config.platform
 	const platform = 'b2b'
 	const factory = new PlatformFactory(config, req)
 	return factory.getAdapter(platform, 'order')

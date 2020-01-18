@@ -15,8 +15,6 @@ class RedisCache {
         this.redisClient = rc;
     }
 
-
-
     cacheCartId (sessionId, cartId) {        
         this.redisClient.set("cart_" + cartId, JSON.stringify({
           session: sessionId,
@@ -38,6 +36,13 @@ class RedisCache {
       }));
     }
 
+    cachePaymentMethods(gci, methods) {
+      this.redisClient.set("payment_methods_" + gci, JSON.stringify({
+        items: methods,
+        created_at: new Date(),
+      }));
+    }
+
     hasBasketItem(cartId, itemId, successCallback, errorCallback) {
       const key = "basket_" + cartId;
       this.redisClient.get(key, (err, value) => {
@@ -47,6 +52,19 @@ class RedisCache {
           successCallback(result);
         } else {
           errorCallback(err);
+        }
+      });
+    }
+
+    hasPaymentMethods(gci, successCallback, errorCallback) {
+      const key = "payment_methods_" + gci;
+      this.redisClient.get(key, (err, value) => {
+        if(value) {
+          const obj = JSON.parse(value);
+          const result = obj.items.length > 0;
+          successCallback(result);
+        } else {
+          successCallback(false);
         }
       });
     }
@@ -85,6 +103,17 @@ class RedisCache {
         });
       }
 
+      getPaymentMethods(gci, successCallback, errorCallback) {
+        const key = "payment_methods_" + gci;
+        this.redisClient.get(key, (err, value) => {
+          if(value) {
+            successCallback(value);
+          } else {
+            errorCallback(err);
+          }
+        });
+      }
+
       findSessionWrapper(cartId) {
         const that = this;
         return new Promise((resolve, reject) => {
@@ -107,7 +136,7 @@ class RedisCache {
         });
      }
 
-     hasBasketItemWrapper(cartId, itemId) {
+    hasBasketItemWrapper(cartId, itemId) {
       const that = this;
       return new Promise((resolve, reject) => {
         that.hasBasketItem(cartId, itemId, (successResponse) => {
@@ -117,6 +146,28 @@ class RedisCache {
           });
       });
    }
+   
+   hasPaymentMethodsWrapper(gci) {
+    const that = this;
+    return new Promise((resolve, reject) => {
+      that.hasPaymentMethods(gci, (successResponse) => {
+          resolve(successResponse);
+        }, (errorResponse) => {
+          reject(errorResponse)
+        });
+    });
+  }
+
+  getPaymentMethodsWrapper(gci) {
+    const that = this;
+    return new Promise((resolve, reject) => {
+      that.getPaymentMethods(gci, (successResponse) => {
+          resolve(successResponse);
+        }, (errorResponse) => {
+          reject(errorResponse)
+        });
+    });
+  }
   
 }
 module.exports = RedisCache;

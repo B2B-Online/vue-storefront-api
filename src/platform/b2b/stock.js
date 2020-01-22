@@ -8,6 +8,7 @@ import { response } from 'express';
 class StockProxy extends AbstractUserProxy {
   constructor (config, req) {
     super(config, req)
+    this.gci = 1078
   }
   
   /**
@@ -22,7 +23,7 @@ class StockProxy extends AbstractUserProxy {
   check ({sku, stockId = 0}) {    
     //https://b2bapieu.planetb2b.com/api/product/pk/310166/?cache=false&format=json&frontend_id=3&gci=1078&view=full
     const options = {
-        uri: 'https://b2bapieu.planetb2b.com/api/product/symbol/'+sku+'/?cache=false&format=json&frontend_id=3&gci=1078&view=full',
+        uri: `https://b2bapieu.planetb2b.com/api/product/symbol/${sku}/?cache=false&format=json&frontend_id=3&gci=${this.gci}&view=full`,
         /*qs: {
             access_token: 'xxxxx xxxxx' // -> uri + '?access_token=xxxxx%20xxxxx'
         },*/
@@ -33,13 +34,13 @@ class StockProxy extends AbstractUserProxy {
     };
 
   return  rp(options)
-      .then(function (repos) {
+      .then(function (resp) {
         const result = {
-          "item_id": repos[0].pk,
-          "product_id": repos[0].pk,
+          "item_id": resp[0].pk,
+          "product_id": resp[0].pk,
           "stock_id": 1, //TODO 
-          "qty": repos[0].quantity,
-          "is_in_stock": repos[0].is_available,
+          "qty": resp[0].quantity,
+          "is_in_stock": resp[0].is_available,
           "is_qty_decimal": false,
           "show_default_notification_message": false,
           "use_config_min_qty": true,
@@ -89,8 +90,7 @@ class StockProxy extends AbstractUserProxy {
    *    "low_stock_date": null,
    *    "is_decimal_divided": false,
    *    "stock_status_changed_auto": 0
-   *  */   
-        
+   *  */           
         return new Promise((resolve, reject) => {
           resolve(result);
         })

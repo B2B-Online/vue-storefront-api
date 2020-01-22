@@ -10,6 +10,8 @@ class OrderProxy extends AbstractOrderProxy {
     this.redis = require('redis');
     this.redisCache = new RedisCache();
     this.gci = 1078;
+    //this.cartApiUrl = 'http://localhost:8000/api';
+    this.cartApiUrl = 'https://cartapi.systemb2b.pl/api';
   }
 
   /**
@@ -73,9 +75,12 @@ class OrderProxy extends AbstractOrderProxy {
   async create (orderData) {
     await this.setShipment(orderData);
     await this.setPayment(orderData);
-    const result = await this.orderData(orderData);
+    let resp = await this.startCheckout(orderData);
+    let result = await this.orderData(orderData, resp.checkout_cart_id);
+    result = await this.postOrderData(orderData, resp.checkout_cart_id);
     if(result) {
-      return this.orderConfirmation(orderData);        
+      await this.orderConfirmation(orderData, resp.checkout_cart_id);
+      await this.orderComplate(orderData, resp.checkout_cart_id);
     } else {
       return new Promise((resolve, reject) => {
         reject();
@@ -88,7 +93,7 @@ class OrderProxy extends AbstractOrderProxy {
     const cartId = orderData.cart_id;
 
     const options = {
-        uri: `https://cartapi.systemb2b.pl/api/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
+        uri: `${this.cartApiUrl}/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
         method: 'PUT',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -118,7 +123,7 @@ class OrderProxy extends AbstractOrderProxy {
     const cartId = orderData.cart_id;
 
     const options = {
-        uri: `https://cartapi.systemb2b.pl/api/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
+        uri: `${this.cartApiUrl}/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
         method: 'PUT',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -144,11 +149,78 @@ class OrderProxy extends AbstractOrderProxy {
     }); 
   }
   
-  async orderData (orderData) {
+  async startCheckout(orderData) {
     const token = orderData.user_id;
     const cartId = orderData.cart_id;
     const options = {
-      uri: `https://cartapi.systemb2b.pl/api/checkout/order_data/gci/${this.gci}/${cartId}/`,
+      uri: `${this.cartApiUrl}/checkout/start_checkout/gci/${this.gci}/`,
+      method: 'GET',
+      headers: {
+          'User-Agent': 'Request-Promise'
+      },
+      json: true,
+      qs: {
+        cache: false,
+        format: 'json'
+       }
+    };
+    
+    const res = await this.redisCache.findSessionWrapper(cartId);
+    options.qs.session_key = JSON.parse(res).session;
+    options.qs.customer_email = 'as_anonymous'; 
+    options.qs.currency='PLN';   
+    if(token) { 
+      options.qs.user_id = token;
+      //TODO set -> options.qs.customer_email;
+    }
+    return  rp(options).then(function (resp) {
+      return new Promise((resolve, reject) => {
+        resolve(resp);
+      });
+    }).catch(function (err) {
+      console.error('Error during call startCheckout', err); 
+      reject();           
+    }); 
+  }
+
+  async orderData(orderData, checkoutCartId) {
+    const token = orderData.user_id;
+    const cartId = orderData.cart_id;
+    const options = {
+      uri: `${this.cartApiUrl}/checkout/order_data/gci/${this.gci}/${checkoutCartId}/`,
+      method: 'GET',
+      headers: {
+          'User-Agent': 'Request-Promise'
+      },      
+      qs: {   
+        cache: false,
+        format: 'json'                       
+      }
+    };
+    const res = await this.redisCache.findSessionWrapper(cartId);
+    options.qs.session_key = JSON.parse(res).session;
+    options.qs.customer_email = 'as_anonymous';    
+    if(token) { 
+      options.qs.user_id = token;
+      //TODO set -> options.qs.customer_email;
+    }
+    
+    return rp(options).then(function (resp) {
+      return new Promise((resolve, reject) => {
+        resolve(true);
+      });
+    }).catch(function (err) {
+      console.error('Error during call postOrderData', err);   
+      reject();         
+    });
+
+  }
+
+  async postOrderData (orderData, checkoutCartId) {
+    const token = orderData.user_id;
+    const cartId = orderData.cart_id;
+    const options = {
+      uri: `${this.cartApiUrl}/checkout/order_data/gci/${this.gci}/${checkoutCartId}/`,
       method: 'POST',
       headers: {
           'User-Agent': 'Request-Promise'
@@ -167,30 +239,47 @@ class OrderProxy extends AbstractOrderProxy {
       options.qs.user_id = token;
       //TODO set -> options.qs.customer_email;
     }
+    
+    const order = {
+      customer: { 
+        company_name: "",
+        first_name: orderData.addressInformation.shippingAddress.firstname, 
+        last_name: orderData.addressInformation.shippingAddress.lastname,
+        email: orderData.addressInformation.shippingAddress.email,
+        phone: orderData.addressInformation.shippingAddress.telephone,
+        street: orderData.addressInformation.shippingAddress.street[0],
+        house: orderData.addressInformation.shippingAddress.street[1], 
+        postal_code: orderData.addressInformation.shippingAddress.postcode,
+        city: orderData.addressInformation.shippingAddress.city,
+        country_code: orderData.addressInformation.shippingAddress.country_id,
+        suite: ""
+      },
+      delivery: {
+        cost:0, 
+        id: orderData.addressInformation.shipping_method_code,
+        name: 'Odbiór osobisty',
+        same_as_contact_data: true
+      },
+      bill:{
+        company_name: "",
+        first_name: orderData.addressInformation.billingAddress.firstname, 
+        last_name: orderData.addressInformation.billingAddress.lastname,
+        email: orderData.addressInformation.billingAddress.email,
+        phone: orderData.addressInformation.billingAddress.telephone,
+        street: orderData.addressInformation.billingAddress.street[0],
+        house: orderData.addressInformation.billingAddress.street[1], 
+        postal_code: orderData.addressInformation.billingAddress.postcode,
+        city: orderData.addressInformation.billingAddress.city,
+        country_code: orderData.addressInformation.billingAddress.country_id,
+        suite: ""
+      },
+      success:true,
+      next:`/api/checkout/order_data/gci/${this.gci}/${checkoutCartId}/`,
+      'marketing-handlowe_info': true
+    };
+
     options.body  = {
-      raw_data : {
-        customer: { 
-          first_name: orderData.addressInformation.shippingAddress.firstname, 
-          last_name: orderData.addressInformation.shippingAddress.lastname,
-          email: orderData.addressInformation.shippingAddress.email,
-          phone: orderData.addressInformation.shippingAddress.telephone,
-          street: orderData.addressInformation.shippingAddress.street[0],
-          house: orderData.addressInformation.shippingAddress.street[1], 
-          postal_code: orderData.addressInformation.shippingAddress.postcode,
-          city: orderData.addressInformation.shippingAddress.city,
-          country_code: orderData.addressInformation.shippingAddress.country_id
-        },
-        delivery: {
-          cost:0, 
-          id: orderData.addressInformation.shipping_method_code,
-          name: 'Odbiór osobisty',
-          same_as_contact_data: true
-        },
-        bill:{},
-        success:true,
-        next:`/api/checkout/order_data/gci/${this.gci}/${cartId}/`,
-        'marketing-handlowe_info': true
-      }
+      raw_data : JSON.stringify(order)
     };
 
     return rp(options).then(function (resp) {
@@ -198,18 +287,18 @@ class OrderProxy extends AbstractOrderProxy {
         resolve(true);
       });
     }).catch(function (err) {
-      console.error('Error during call orderData', err);   
+      console.error('Error during call postOrderData', err);   
       reject();         
     });
 
   }
 
-  async orderConfirmation (orderData) {
+  async orderConfirmation (orderData, checkoutCartId) {
     const token = orderData.user_id;
     const cartId = orderData.cart_id;
     const email = orderData.addressInformation.shippingAddress.email;
     const options = {
-        uri: `https://cartapi.systemb2b.pl/api/checkout/order_confirmation/gci/${this.gci}/${cartId}/`,
+        uri: `${this.cartApiUrl}/checkout/order_confirmation/gci/${this.gci}/${checkoutCartId}/`,
         method: 'POST',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -219,6 +308,13 @@ class OrderProxy extends AbstractOrderProxy {
           customer_email: email
         }
     }; 
+    const order  = {
+      customer_note: "",
+      confim: true
+    }
+    options.body  = {
+      raw_data : JSON.stringify(order)
+    };
 
     const res = await this.redisCache.findSessionWrapper(cartId);
     options.qs.session_key = JSON.parse(res).session;
@@ -234,6 +330,36 @@ class OrderProxy extends AbstractOrderProxy {
       });
   }
 
-}
+  async orderComplate (orderData, checkoutCartId) {
+    const token = orderData.user_id;
+    const cartId = orderData.cart_id;
+    
+    const options = {
+        uri: `${this.cartApiUrl}/checkout/completed/gci/${this.gci}/${checkoutCartId}/`,
+        method: 'GET',
+        headers: {
+            'User-Agent': 'Request-Promise'
+        },
+        json: true,
+        qs: {                  
+          cache: false
+        }
+    }; 
 
+    const res = await this.redisCache.findSessionWrapper(cartId);
+    options.qs.session_key = JSON.parse(res).session;
+    options.qs.customer_email = 'as_anonymous';  
+    if(token) { 
+      options.qs.user_id = token;
+      //TODO set -> options.qs.customer_email;
+    }
+    return  rp(options).then(function (resp) {
+      return new Promise((resolve, reject) => {
+        resolve();
+      });
+    }).catch(function (err) {
+      console.error('Error during call orderComplate t', err);            
+    }); 
+  }
+}
 module.exports = OrderProxy

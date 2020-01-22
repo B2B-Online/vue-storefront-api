@@ -15,11 +15,13 @@ class CartProxy extends AbstractCartProxy {
       this.redis = require('redis');
       this.redisCache = new RedisCache();
       this.gci = 1078;
+      //this.cartApiUrl = 'http://localhost:8000/api';
+      this.cartApiUrl = 'https://cartapi.systemb2b.pl/api';
     }
 
     create (customerToken) {
       const options = {
-        uri: `https://cartapi.systemb2b.pl/api/get_or_create_cart/gci/${this.gci}`,
+        uri: `${this.cartApiUrl}/get_or_create_cart/gci/${this.gci}`,
         method: 'GET',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -54,7 +56,7 @@ class CartProxy extends AbstractCartProxy {
 
    async pull (token, cartId, params) {
     const options = {
-      uri: `https://cartapi.systemb2b.pl/api/get_or_create_cart/gci/${this.gci}`,
+      uri: `${this.cartApiUrl}/get_or_create_cart/gci/${this.gci}`,
       method: 'GET',
       headers: {
           'User-Agent': 'Request-Promise'
@@ -101,8 +103,8 @@ class CartProxy extends AbstractCartProxy {
   }
 
   async update (token, cartId, cartItem) {
-    const updateProductUrl = `https://cartapi.systemb2b.pl/api/update_product/gci/${this.gci}/`;
-    const addProductUrl = `https://cartapi.systemb2b.pl/api/add_product/gci/${this.gci}/`;
+    const updateProductUrl = `${this.cartApiUrl}/update_product/gci/${this.gci}/`;
+    const addProductUrl = `${this.cartApiUrl}/add_product/gci/${this.gci}/`;
     const options = {
       uri: addProductUrl,
       method: 'PUT',
@@ -160,7 +162,7 @@ class CartProxy extends AbstractCartProxy {
 
     async delete (token, cartId, cartItem) {      
       const options = {
-        uri: `https://cartapi.systemb2b.pl/api/remove_product/gci/${this.gci}/`,
+        uri: `${this.cartApiUrl}/remove_product/gci/${this.gci}/`,
         method: 'PUT',
         headers: {
           'User-Agent': 'Request-Promise'
@@ -187,7 +189,7 @@ class CartProxy extends AbstractCartProxy {
 
     async applyCoupon (token, cartId, coupon) {
       const options = {
-        uri: `https://cartapi.systemb2b.pl/api/set_discount_code/gci/${this.gci}/`,
+        uri: `${this.cartApiUrl}/set_discount_code/gci/${this.gci}/`,
         method: 'GET',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -214,7 +216,7 @@ class CartProxy extends AbstractCartProxy {
   
     async deleteCoupon (token, cartId) {
       const options = {
-        uri: `https://cartapi.systemb2b.pl/api/remove_discount_code/gci/${this.gci}/`,
+        uri: `${this.cartApiUrl}/remove_discount_code/gci/${this.gci}/`,
         method: 'GET',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -252,7 +254,7 @@ class CartProxy extends AbstractCartProxy {
 
     async getShippingMethods (token, cartId, address) {
       const options = {
-        uri: `https://cartapi.systemb2b.pl/api/get_shipment_choices/gci/${this.gci}/${cartId}/`,
+        uri: `${this.cartApiUrl}/get_shipment_choices/gci/${this.gci}/${cartId}/`,
         method: 'GET',
         headers: {
             'User-Agent': 'Request-Promise'
@@ -332,18 +334,10 @@ class CartProxy extends AbstractCartProxy {
       //}
     }
     
-    setShippingInformation (token, cartId, address) {
-        const result = {
-          "payment_methods":[
-            {
-              "code":"17",
-              "title":"Cash On Delivery"
-            },
-            {
-              "code":"18",
-              "title":"Check Money order"
-            }
-          ],
+   async setShippingInformation (token, cartId, address) {
+      const paymentMethods = await this.redisCache.getPaymentMethodsWrapper(this.gci);  
+      const result = {
+          "payment_methods": paymentMethods,
           "totals":
             {
             /*  "grand_total":66,

@@ -13,27 +13,34 @@ class RedisCache {
           rc.auth(this.config.redis.auth);
         }
         this.redisClient = rc;
+        this.expireTime = 7200;
     }
 
     cacheCartId (sessionId, cartId) {        
-        this.redisClient.set("cart_" + cartId, JSON.stringify({
+      const key =   "cart_" + cartId;
+      this.redisClient.set(key, JSON.stringify({
           session: sessionId,
           created_at: new Date(),
         }));
+        this.redisClient.expire(key, this.expireTime);   
     }
 
     cacheProductId (sku, id) {
-        this.redisClient.set("product_" + sku, JSON.stringify({
+      const key = "product_" + sku;
+      this.redisClient.set(key, JSON.stringify({
           item_id: id,
           created_at: new Date(),
-        }));
+      }));
+      this.redisClient.expire(key, this.expireTime);
     }
 
     cacheBasket(cartId, cartItems) {
-      this.redisClient.set("basket_" + cartId, JSON.stringify({
+      const key = "basket_" + cartId;
+      this.redisClient.set(key, JSON.stringify({
         items: cartItems,
         created_at: new Date(),
       }));
+      this.redisClient.expire(key, this.expireTime);
     }
 
     cachePaymentMethods(gci, methods) {

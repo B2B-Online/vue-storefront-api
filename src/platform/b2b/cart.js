@@ -48,8 +48,7 @@ class CartProxy extends AbstractCartProxy {
        })
      })
      .catch(function (err) {
-       console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);  
-       reject();     
+       console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);              
      }); 
     }
     
@@ -74,7 +73,7 @@ class CartProxy extends AbstractCartProxy {
        const res = await this.redisCache.findSessionWrapper(cartId);
        options.qs.session_key = JSON.parse(res).session;
     } else {
-      options.qs.user_id = customerToken;
+      options.qs.user_id = token;
     }
     const that = this;
     return  rp(options).then(function (resp) {      
@@ -96,8 +95,7 @@ class CartProxy extends AbstractCartProxy {
         resolve(basket);
       })
     }).catch(function (err) {
-      console.error('Error during call pull', err);  
-      reject();     
+      console.error('Error during call pull', err);      
     }); 
 
   }
@@ -120,7 +118,7 @@ class CartProxy extends AbstractCartProxy {
      const res = await this.redisCache.findSessionWrapper(cartId);
      options.qs.session_key = JSON.parse(res).session;
    } else {
-     options.qs.user_id = customerToken;
+     options.qs.user_id = token;
    }
    const itemId = await this.redisCache.findProductIdWrapper(cartItem.sku);
    const hasItem = await this.redisCache.hasBasketItemWrapper(cartId, itemId)
@@ -155,8 +153,7 @@ class CartProxy extends AbstractCartProxy {
     });
 
   }).catch(function (err) {
-    console.error('Error during call update', err);  
-    reject();     
+    console.error('Error during call update', err);     
   }); 
   }
 
@@ -284,15 +281,14 @@ class CartProxy extends AbstractCartProxy {
             "error_message": "",
             "price_excl_tax": item.cost,
             "price_incl_tax": item.cost_net
-          })
+          });
         });  
                    
         return new Promise((resolve, reject) => {
           resolve(result);
         })
       }).catch(function (err) {
-        console.error('Error during call getShippingMethods', err);  
-        reject();     
+        console.error('Error during call getShippingMethods', err);      
       });         
     }
     
@@ -323,8 +319,7 @@ class CartProxy extends AbstractCartProxy {
             resolve(result);
           })
         }).catch(function (err) {
-          console.error('Error during call getPaymentMethods', err);  
-          reject();     
+          console.error('Error during call getPaymentMethods', err);       
         });   
       //} else {
       //  const result = this.redisCache.getPaymentMethodsWrapper(1078);

@@ -73,18 +73,31 @@ class OrderProxy extends AbstractOrderProxy {
    * @param {*} orderData 
    */
   async create (orderData) {
+    let createOrderResult = null;
     await this.setShipment(orderData);
     await this.setPayment(orderData);
     let resp = await this.startCheckout(orderData);
-    let result = await this.orderData(orderData, resp.checkout_cart_id);
-    result = await this.postOrderData(orderData, resp.checkout_cart_id);
-    if(result) {
-      await this.orderConfirmation(orderData, resp.checkout_cart_id);
-      await this.orderComplate(orderData, resp.checkout_cart_id);
+    if(resp.success) {
+      const checkoutCartId = resp.checkout_cart_id;
+      if(!checkoutCartId) {
+        console.error("Create order faild checkout_cart_id is undifined", resp);
+        return new Promise((resolve, reject) => { reject(); });
+      }
+      const orderDataStatus = await this.orderData(orderData, checkoutCartId);
+      if(orderDataStatus) {
+        const postOrderDataStatus = await this.postOrderData(orderData, checkoutCartId);
+        if(postOrderDataStatus) {
+          await this.orderConfirmation(orderData, checkoutCartId);
+          createOrderResult = await this.orderComplate(orderData, checkoutCartId);
+        }
+      } 
+    }
+    if(createOrderResult) {
+      console.info("Create order finished successfull", createOrderResult);
+      return new Promise((resolve, reject) => { resolve(createOrderResult); });      
     } else {
-      return new Promise((resolve, reject) => {
-        reject();
-    });
+      console.error("Create order faild");
+      return new Promise((resolve, reject) => { reject(); });
     }
   }
 
@@ -142,7 +155,7 @@ class OrderProxy extends AbstractOrderProxy {
     options.qs.method_code =  orderData.addressInformation.shipping_method_code;
     return  rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
-        resolve();
+        resolve(true);
       });
     }).catch(function (err) {
       console.error('Error during call setShipment', err);            
@@ -178,8 +191,7 @@ class OrderProxy extends AbstractOrderProxy {
         resolve(resp);
       });
     }).catch(function (err) {
-      console.error('Error during call startCheckout', err); 
-      reject();           
+      console.error('Error during call startCheckout', err);       
     }); 
   }
 
@@ -189,6 +201,7 @@ class OrderProxy extends AbstractOrderProxy {
     const options = {
       uri: `${this.cartApiUrl}/checkout/order_data/gci/${this.gci}/${checkoutCartId}/`,
       method: 'GET',
+      json: true,
       headers: {
           'User-Agent': 'Request-Promise'
       },      
@@ -207,11 +220,10 @@ class OrderProxy extends AbstractOrderProxy {
     
     return rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
-        resolve(true);
+        resolve(resp.success);
       });
     }).catch(function (err) {
-      console.error('Error during call postOrderData', err);   
-      reject();         
+      console.error('Error during call postOrderData', err);        
     });
 
   }
@@ -240,7 +252,7 @@ class OrderProxy extends AbstractOrderProxy {
       //TODO set -> options.qs.customer_email;
     }
     
-    const order = {
+    const rawData = {
       customer: { 
         company_name: "",
         first_name: orderData.addressInformation.shippingAddress.firstname, 
@@ -279,7 +291,7 @@ class OrderProxy extends AbstractOrderProxy {
     };
 
     options.body  = {
-      raw_data : JSON.stringify(order)
+      raw_data : JSON.stringify(rawData)
     };
 
     return rp(options).then(function (resp) {
@@ -287,8 +299,7 @@ class OrderProxy extends AbstractOrderProxy {
         resolve(true);
       });
     }).catch(function (err) {
-      console.error('Error during call postOrderData', err);   
-      reject();         
+      console.error('Error during call postOrderData', err);           
     });
 
   }
@@ -323,7 +334,7 @@ class OrderProxy extends AbstractOrderProxy {
     }
     return  rp(options).then(function (resp) {
         return new Promise((resolve, reject) => {
-          resolve();
+          resolve(resp.success);
         });
       }).catch(function (err) {
         console.error('Error during call orderConfirmation', err);            
@@ -355,7 +366,7 @@ class OrderProxy extends AbstractOrderProxy {
     }
     return  rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
-        resolve();
+        resolve(resp);
       });
     }).catch(function (err) {
       console.error('Error during call orderComplate t', err);            

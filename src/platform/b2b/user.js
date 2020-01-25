@@ -93,19 +93,19 @@ class UserProxy extends AbstractUserProxy {
    * 
    * } requestToken 
    */
-  me (customerToken) {
+  me(token) {
     return new Promise((resolve, reject) => {
         resolve([]);
     });
   }
 
-  orderHistory (customerToken, page, pageSize) {
+  orderHistory (token, page, pageSize) {
     return new Promise((resolve, reject) => {
         resolve([]);
     });
   }
   
-  creditValue (customerToken) {
+  creditValue (token) {
     return new Promise((resolve, reject) => {
         resolve([]);
     });

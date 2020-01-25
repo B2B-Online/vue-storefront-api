@@ -343,8 +343,7 @@ class OrderProxy extends AbstractOrderProxy {
 
   async orderComplate (orderData, checkoutCartId) {
     const token = orderData.user_id;
-    const cartId = orderData.cart_id;
-    
+    const cartId = orderData.cart_id;    
     const options = {
         uri: `${this.cartApiUrl}/checkout/completed/gci/${this.gci}/${checkoutCartId}/`,
         method: 'GET',
@@ -356,7 +355,6 @@ class OrderProxy extends AbstractOrderProxy {
           cache: false
         }
     }; 
-
     const res = await this.redisCache.findSessionWrapper(cartId);
     options.qs.session_key = JSON.parse(res).session;
     options.qs.customer_email = 'as_anonymous';  
@@ -366,7 +364,12 @@ class OrderProxy extends AbstractOrderProxy {
     }
     return  rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
-        resolve(resp);
+        const confirmation = {
+          backendOrderId: resp.order_id,
+          orderNumber: resp.order_number,
+          backendResponse: resp
+        };
+        resolve(confirmation);
       });
     }).catch(function (err) {
       console.error('Error during call orderComplate t', err);            

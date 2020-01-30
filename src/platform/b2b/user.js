@@ -1,10 +1,25 @@
 import AbstractUserProxy from '../abstract/user'
 import { multiStoreConfig } from './util'
 
+const AmazonCognitoIdentity = require('amazon-cognito-identity-js');
+const CognitoUserPool = AmazonCognitoIdentity.CognitoUserPool;
+const AWS = require('aws-sdk');
+const request = require('request');
+const jwkToPem = require('jwk-to-pem');
+const jwt = require('jsonwebtoken');
+global.fetch = require('node-fetch');
+
 class UserProxy extends AbstractUserProxy {
   constructor (config, req){    
-    super(config, req);
+    super(config, req);  
     
+    this.poolData = {    
+      UserPoolId : "eu-west-1_GivPpBCha", // Your user pool id here    
+      ClientId : "780u61u0vjvjt1e3chm3gu6cke" // Your client id here
+      }; 
+
+    this.pool_region = 'eu-west-1';
+    this.userPool = new AmazonCognitoIdentity.CognitoUserPool(this.poolData);
   }
 
   /**
@@ -41,10 +56,46 @@ class UserProxy extends AbstractUserProxy {
    * @param {*} userData 
    */
 
-  register (userData) {
+  async register (userData) {
+    
+    var attributeList = [];
+    attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"name",Value: `${userData.customer.firstname} ${userData.customer.lastname}`}));
+    attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"given_name", Value: userData.customer.firstname}));
+    attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"family_name", Value: userData.customer.lastname}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"preferred_username",Value:"jay"}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"gender",Value:"male"}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"birthdate",Value:"1991-06-21"}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"address",Value:"CMB"}));
+    attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"email", Value: userData.customer.email}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"phone_number",Value:"+5412614324321"}));
+    //attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({Name:"custom:scope",Value:"admin"}));
+
+    const that = this;
     return new Promise((resolve, reject) => {
-      resolve([]);
-    });     
+        that.userPool.signUp(userData.customer.email, userData.password, attributeList, null, function(err, resp){
+          if (!err) {
+          const result = {
+            id: 3,
+            group_id: 1,
+            created_at: new Date(),
+            updated_at:  new Date(),
+            created_in: "AWS Cogniton",
+            email: resp.user.username,
+            firstname: "",
+            lastname: "",
+            store_id: 1,
+            website_id: 1,
+            addresses: [],
+            disable_auto_group_change: 0            
+          }
+          resolve(result);
+          console.info(`user name is ${resp.user.username}`);
+        } else {
+          console.error(err);
+          reject(err);
+        }
+      });
+    }); 
   }
 
   /**
@@ -60,10 +111,35 @@ class UserProxy extends AbstractUserProxy {
   *        "code": 200,
   *        "result": "3tx80s4f0rhkoonqe4ifcoloktlw9glo"
   *    }
+  * @param {*} input
   */
-  login (userData) {
+ async login (input) {
+    
+    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+      Username : input.username,
+      Password : input.password,
+    });
+
+    const userData = {
+      Username : input.username,
+      Pool : this.userPool
+    };
+    const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+
     return new Promise((resolve, reject) => {
-        resolve([]);
+      cognitoUser.authenticateUser(authenticationDetails, {
+        onSuccess: function (result) {
+            console.log('access token + ' + result.getAccessToken().getJwtToken());
+            console.log('id token + ' + result.getIdToken().getJwtToken());
+            console.log('refresh token + ' + result.getRefreshToken().getToken());
+            //TODO should we only return access token ???
+            resolve(result.getAccessToken().getJwtToken());
+        },
+        onFailure: function(err) {
+            console.log(err);
+            reject(err);
+        }
+      });
     });       
   }
 
@@ -118,13 +194,32 @@ class UserProxy extends AbstractUserProxy {
   }
   
   resetPassword (emailData) {
-    return this.api.user.resetPassword(emailData)
+    return new Promise((resolve, reject) => {
+      resolve([]);
+    });
   }
+
   update (userData) {
-    return this.api.user.update(userData)
+    return new Promise((resolve, reject) => {
+      resolve([]);
+    });
   }
-  changePassword (passwordData) {
-    return this.api.user.changePassword(passwordData)
+
+  changePassword (data) {
+    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+      Username: data.username,
+      Password: data.password,
+    });
+
+    const userData = {
+      Username: data.username,
+      Pool: userPool
+    };
+    
+    const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+    return new Promise((resolve, reject) => {
+      resolve([]);
+    });
   }
 }
 

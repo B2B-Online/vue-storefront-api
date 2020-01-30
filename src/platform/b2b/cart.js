@@ -19,7 +19,7 @@ class CartProxy extends AbstractCartProxy {
       this.cartApiUrl = 'https://cartapi.systemb2b.pl/api';
     }
 
-    create (customerToken) {
+    create (token) {
       const options = {
         uri: `${this.cartApiUrl}/get_or_create_cart/gci/${this.gci}`,
         method: 'GET',
@@ -32,12 +32,13 @@ class CartProxy extends AbstractCartProxy {
         }
      };
      
-     if(customerToken) {
-       options.qs.user_id = customerToken;
-     } else {
-       const uuid = require('uuid');
-       options.qs.session_key = uuid.v1();
+     if(token) {
+       options.qs.user_id = token;
      } 
+    
+    const uuid = require('uuid');
+    options.qs.session_key = uuid.v1();
+     
      const that = this;
      return  rp(options)
      .then(function (resp) {
@@ -61,7 +62,6 @@ class CartProxy extends AbstractCartProxy {
           'User-Agent': 'Request-Promise'
       },
       json: true,
-      //timeout: 15000,
       qs: {         
         cache: false,
         format: "json",
@@ -69,12 +69,11 @@ class CartProxy extends AbstractCartProxy {
       }
     };
 
-    if(!token) {               
-       const res = await this.redisCache.findSessionWrapper(cartId);
-       options.qs.session_key = JSON.parse(res).session;
-    } else {
-      options.qs.user_id = token;
-    }
+    if(token) {               
+       options.qs.user_id = token;
+    } 
+    const res = await this.redisCache.findSessionWrapper(cartId);
+    options.qs.session_key = JSON.parse(res).session;
     const that = this;
     return  rp(options).then(function (resp) {      
       const basket = [];
@@ -114,12 +113,12 @@ class CartProxy extends AbstractCartProxy {
       }
    };
 
-   if(!token) {               
-     const res = await this.redisCache.findSessionWrapper(cartId);
-     options.qs.session_key = JSON.parse(res).session;
-   } else {
+   if(token) {               
      options.qs.user_id = token;
    }
+   const res = await this.redisCache.findSessionWrapper(cartId);
+   options.qs.session_key = JSON.parse(res).session;
+   
    const itemId = await this.redisCache.findProductIdWrapper(cartItem.sku);
    const hasItem = await this.redisCache.hasBasketItemWrapper(cartId, itemId)
    if(hasItem) {

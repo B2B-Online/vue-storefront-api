@@ -1,4 +1,6 @@
 import rp from 'request-promise-native';
+import B2bConfiguration from  './util';
+
 class RedisCache {
     
     constructor () {    
@@ -12,6 +14,7 @@ class RedisCache {
         if (this.config.redis.auth) {
           rc.auth(this.config.redis.auth);
         }
+        this.apiConfig = new B2bConfiguration();
         this.redisClient = rc;
         this.expireTime = 7200;
     }
@@ -89,22 +92,31 @@ class RedisCache {
 
       findProductId(sku, successCallback, errorCallback) {
         const key = "sku_" + sku;
+        const that  = this;
         this.redisClient.get(key, (err, value) => {
           if(value) {
             successCallback(value);
           } else {                                          
               const options = {
-                  uri: 'https://b2bapieu.planetb2b.com/api/product/symbol/'+sku+'/?cache=false&format=json&frontend_id=3&gci=1078',
+                  uri: `${that.apiConfig.b2bApiUrl}/product/symbol/${sku}/?cache=false&format=json&frontend_id=${that.apiConfig.frontendId}&gci=${that.apiConfig.gci}`,
                   headers: {
                       'User-Agent': 'Request-Promise'
                   },
                   json: true
               };
-              rp(options).then(function (repos) {
-                successCallback(repos[0].pk);
+              rp(options).then(function (resp) {
+                if(resp && resp.length == 1) {
+                  successCallback(resp[0].pk);
+                } else {
+                  const error = {
+                    code: 500,
+                    errorMessage: `Product ${sku} not available for frontend_id=${that.apiConfig.frontendId} and gci=${that.apiConfig.gci}`
+                  }
+                  errorCallback(error);
+                }
+
               }).catch(function (err) {
-                console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);
-                
+                console.error('Error during call: b2bapieu.planetb2b.com/api/product/symbol/', err);                
               });
           }
         });

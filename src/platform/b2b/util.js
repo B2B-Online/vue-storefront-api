@@ -1,7 +1,12 @@
 class B2bConfiguration {
-    constructor() {
+    constructor() {        
         this.config = require('config');
-        this.gci = 1078
-        this.cartApiUrl = `https://cartapi.systemb2b.pl/api/get_or_create_cart/gci/${this.gci}`
+        this.frontendId = 3;
+        this.gci = 1078;
+        this.cartApiUrl = `https://cartapi.systemb2b.pl/api`;
+        //this.b2bApiUrl = 'http://b2bapi-eu.i-shark.net/api';
+        this.b2bApiUrl = 'https://b2bapieu.planetb2b.com/api';
     }
 }
+
+module.exports = B2bConfiguration

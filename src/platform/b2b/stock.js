@@ -1,14 +1,12 @@
 import rp from 'request-promise-native';
 import AbstractUserProxy from '../abstract/user'
-import { multiStoreConfig } from './util'
 import { response } from 'express';
-
+import B2bConfiguration from  './util';
+ 
 class StockProxy extends AbstractUserProxy {
   constructor (config, req) {
     super(config, req);
-    this.gci = 1078;
-    this.b2bApiUrl = 'https://b2bapieu.planetb2b.com/api';
-    this.frontendId = 3;
+    this.apiConfig = new B2bConfiguration();
   }
   
   /**
@@ -22,7 +20,7 @@ class StockProxy extends AbstractUserProxy {
    */
   check ({sku, stockId = 0}) {    
     const options = {
-      uri: `${this.b2bApiUrl}/product/symbol/${sku}/?cache=false&format=json&frontend_id=${this.frontendId}&gci=${this.gci}&view=full`,
+      uri: `${this.apiConfig.b2bApiUrl}/product/symbol/${sku}/?cache=false&format=json&frontend_id=${this.apiConfig.frontendId}&gci=${this.apiConfig.gci}&view=full`,
         headers: {
           'User-Agent': 'Request-Promise'
       },
@@ -32,11 +30,11 @@ class StockProxy extends AbstractUserProxy {
   return  rp(options)
       .then(function (resp) {
         const result = {
-          "item_id": resp[0].pk,
-          "product_id": resp[0].pk,
+          "item_id": resp.length > 0 ? resp[0].pk : null,
+          "product_id": resp.length > 0 ? resp[0].pk : null,
           "stock_id": 1, //TODO 
-          "qty": resp[0].quantity,
-          "is_in_stock": resp[0].is_available,
+          "qty": resp.length > 0 ? resp[0].quantity : 0,
+          "is_in_stock": resp.length > 0 ? resp[0].is_available : false,
           "is_qty_decimal": false,
           "show_default_notification_message": false,
           "use_config_min_qty": true,

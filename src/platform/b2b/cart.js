@@ -1,5 +1,5 @@
 import AbstractCartProxy from '../abstract/cart'
-import { multiStoreConfig } from './util'
+import B2bConfiguration from  './util';
 import rp from 'request-promise-native';
 import e, { response } from 'express';
 import RedisCache from './redis';
@@ -11,12 +11,12 @@ import RedisCache from './redis';
 class CartProxy extends AbstractCartProxy {
     constructor (config, req) {    
       super(config, req)
-      this.config = require('config');
       this.redis = require('redis');
       this.redisCache = new RedisCache();
-      this.gci = 1078;
+      this.apiConfig = new B2bConfiguration();
+      this.gci = this.apiConfig.gci;
       //this.cartApiUrl = 'http://localhost:8000/api';
-      this.cartApiUrl = 'https://cartapi.systemb2b.pl/api';
+      this.cartApiUrl = this.apiConfig.cartApiUrl;
     }
 
     create (token) {
@@ -291,8 +291,7 @@ class CartProxy extends AbstractCartProxy {
       });         
     }
     
-    async getPaymentMethods (token, cartId) {
-      //if(!this.redisCache.hasPaymentMethodsWrapper(1078)) {
+    async getPaymentMethods (token, cartId) {      
         const options = {
           uri: `https://order.planetb2b.com/api/v.1.0/get_payment_methods/${this.gci}/`,
           method: 'GET',
@@ -314,18 +313,12 @@ class CartProxy extends AbstractCartProxy {
           });  
                      
           return new Promise((resolve, reject) => {
-            that.redisCache.cachePaymentMethods(1078, result); 
+            that.redisCache.cachePaymentMethods(that.gci, result); 
             resolve(result);
           })
         }).catch(function (err) {
           console.error('Error during call getPaymentMethods', err);       
         });   
-      //} else {
-      //  const result = this.redisCache.getPaymentMethodsWrapper(1078);
-      //  return new Promise((resolve, reject) => {
-      //    resolve(result);
-      //  });
-      //}
     }
     
    async setShippingInformation (token, cartId, address) {

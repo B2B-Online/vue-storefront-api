@@ -2,16 +2,16 @@ import AbstractOrderProxy from '../abstract/order'
 import order from 'src/api/order';
 import rp from 'request-promise-native';
 import RedisCache from './redis';
-
+import B2bConfiguration from  './util';
 class OrderProxy extends AbstractOrderProxy {
   constructor (config, req) {
     super(config, req);
-    this.config = require('config');
     this.redis = require('redis');
     this.redisCache = new RedisCache();
-    this.gci = 1078;
+    this.apiConfig = new B2bConfiguration();
+    this.gci = this.apiConfig.gci;
     //this.cartApiUrl = 'http://localhost:8000/api';
-    this.cartApiUrl = 'https://cartapi.systemb2b.pl/api';
+    this.cartApiUrl = this.apiConfig.cartApiUrl;
   }
 
   /**

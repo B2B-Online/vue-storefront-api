@@ -6,6 +6,7 @@
        "slug": {"type": "keyword"},
        "size": {"type": "integer"},
        "size_options": {"type": "integer"},
+       "final_price": {"type": "float"},
        "price": {"type": "float"},
        "has_options": {"type": "boolean"},            
        "special_price": {"type": "float"},

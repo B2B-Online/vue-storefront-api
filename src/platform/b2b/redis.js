@@ -53,6 +53,13 @@ class RedisCache {
       }));
     }
 
+    cacheShippingMethods(gci, methods) {
+      this.redisClient.set("shipping_methods_" + gci, JSON.stringify({
+        items: methods,
+        created_at: new Date(),
+      }));
+    }
+
     hasBasketItem(cartId, itemId, successCallback, errorCallback) {
       const key = "basket_" + cartId;
       this.redisClient.get(key, (err, value) => {
@@ -133,6 +140,17 @@ class RedisCache {
         });
       }
 
+      getShippingMethodsAsJson(gci, successCallback, errorCallback) {
+        const key = "shipping_methods_" + gci;
+        this.redisClient.get(key, (err, value) => {
+          if(value) {
+            successCallback(JSON.parse(value));
+          } else {
+            errorCallback(err);
+          }
+        });
+      }
+
       findSessionWrapper(cartId) {
         const that = this;
         return new Promise((resolve, reject) => {
@@ -187,6 +205,16 @@ class RedisCache {
         });
     });
   }
-  
+
+  getShippingMethodsWrapperAsJson(gci) {
+    const that = this;
+    return new Promise((resolve, reject) => {
+      that.getShippingMethodsAsJson(gci, (successResponse) => {
+          resolve(successResponse);
+        }, (errorResponse) => {
+          reject(errorResponse)
+        });
+    });
+  }
 }
 module.exports = RedisCache;

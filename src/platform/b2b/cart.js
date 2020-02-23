@@ -282,7 +282,8 @@ class CartProxy extends AbstractCartProxy {
             "price_incl_tax": item.cost_net
           });
         });  
-                   
+        that.redisCache.cacheShippingMethods(that.gci, result);
+
         return new Promise((resolve, reject) => {
           resolve(result);
         })
@@ -321,8 +322,13 @@ class CartProxy extends AbstractCartProxy {
         });   
     }
     
-   async setShippingInformation (token, cartId, address) {
-      const paymentMethods = await this.redisCache.getPaymentMethodsWrapper(this.gci);  
+   async setShippingInformation (token, cartId, address) {     
+      let paymentMethods = null
+      if(address.addressInformation.shippingMethodCode) {
+        paymentMethods = await this.setShipment(token, cartId, address.addressInformation.shippingMethodCode);
+      } else {
+        paymentMethods = await this.redisCache.getPaymentMethodsWrapper(this.gci);
+      }
       const result = {
           "payment_methods": paymentMethods,
           "totals":
@@ -386,5 +392,52 @@ class CartProxy extends AbstractCartProxy {
             resolve(result);
         });
     }
+
+    async setShipment (token, cartId, shippingMethodCode) {  
+      const options = {
+          uri: `${this.cartApiUrl}/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
+          method: 'PUT',
+          headers: {
+              'User-Agent': 'Request-Promise'
+          },
+          json: true,
+          qs: {                  
+            method: 'set_shipment'
+          }
+      }; 
+  
+      const res = await this.redisCache.findSessionWrapper(cartId);
+      options.qs.session_key = JSON.parse(res).session;
+      if(token) { 
+        options.qs.user_id = token;
+      }
+      options.qs.method_code =  shippingMethodCode;
+      return  rp(options).then(function (resp) {
+        //resp.payment_choices . resp.payment_choices.length, Array.isArray(resp.payment_choices)
+        const paymentMethods = [];
+        resp.payment_choices.forEach(item => {
+          paymentMethods.push({
+            "code": item.id,
+            "title": item.method_name
+          })
+        }); 
+        let result = {
+          status: resp.payment_choices.length > 0,
+          methods: paymentMethods
+        }
+        return new Promise((resolve, reject) => {
+          resolve(result);
+        });
+      }).catch(function (err) {
+        console.error('Error during call setShipment', err);    
+        return new Promise((resolve, reject) => {
+          resolve({
+            status: false,
+            message: err.error.detail
+          });
+        });        
+      }); 
+    }
+
 }
 module.exports = CartProxy;

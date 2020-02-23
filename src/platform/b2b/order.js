@@ -74,8 +74,16 @@ class OrderProxy extends AbstractOrderProxy {
    */
   async create (orderData) {
     let createOrderResult = null;
-    await this.setShipment(orderData);
-    await this.setPayment(orderData);
+    let orderConfirmationResp = null;
+    //let setShipmentResp = await this.setShipment(orderData);
+    let setPaymentResp = await this.setPayment(orderData);
+    if(!setPaymentResp.status) {
+      const error = {
+        code: 500,
+        errorMessage: setPaymentResp.message
+      }
+      return new Promise((resolve, reject) => { reject(error); });
+    }
     let resp = await this.startCheckout(orderData);
     if(resp.success) {
       const checkoutCartId = resp.checkout_cart_id;
@@ -87,8 +95,16 @@ class OrderProxy extends AbstractOrderProxy {
       if(orderDataStatus) {
         const postOrderDataStatus = await this.postOrderData(orderData, checkoutCartId);
         if(postOrderDataStatus) {
-          await this.orderConfirmation(orderData, checkoutCartId);
-          createOrderResult = await this.orderComplate(orderData, checkoutCartId);
+          orderConfirmationResp = await this.orderConfirmation(orderData, checkoutCartId);
+          if(orderConfirmationResp.status) {
+            createOrderResult = await this.orderComplate(orderData, checkoutCartId);
+          } else {
+            const error = {
+              code: 500,
+              errorMessage: orderConfirmationResp.message
+            }
+            return new Promise((resolve, reject) => { reject(error); });
+          }
         }
       } 
     }
@@ -97,7 +113,11 @@ class OrderProxy extends AbstractOrderProxy {
       return new Promise((resolve, reject) => { resolve(createOrderResult); });      
     } else {
       console.error("Create order faild");
-      return new Promise((resolve, reject) => { reject(); });
+      const error = {
+        code: 500,
+        errorMessage: "Create order faild"
+      }
+      return new Promise((resolve, reject) => { reject(error); });
     }
   }
 
@@ -124,44 +144,23 @@ class OrderProxy extends AbstractOrderProxy {
       options.qs.method_code =  orderData.addressInformation.payment_method_code;
       return rp(options).then(function (resp) {
         return new Promise((resolve, reject) => {
-            resolve();
+            resolve({
+              status: true
+            });
         });
       }).catch(function (err) {
+        //err.error.detail
+        //err.name
+        //err.message
         console.error('Error during call setPayment', err);     
+        return new Promise((resolve, reject) => {
+          resolve({
+            status: false,
+            message: err.error.detail
+          });
       }); 
-    }
-
-  async setShipment (orderData) {
-    const token = orderData.user_id;
-    const cartId = orderData.cart_id;
-
-    const options = {
-        uri: `${this.cartApiUrl}/set_payment_or_shipment/gci/${this.gci}/${cartId}/`,
-        method: 'PUT',
-        headers: {
-            'User-Agent': 'Request-Promise'
-        },
-        json: true,
-        qs: {                  
-          method: 'set_shipment'
-        }
-    }; 
-
-    const res = await this.redisCache.findSessionWrapper(cartId);
-    options.qs.session_key = JSON.parse(res).session;
-    if(token) { 
-      options.qs.user_id = token;
-    }
-    options.qs.method_code =  orderData.addressInformation.shipping_method_code;
-    return  rp(options).then(function (resp) {
-      return new Promise((resolve, reject) => {
-        resolve(true);
-      });
-    }).catch(function (err) {
-      console.error('Error during call setShipment', err);            
-    }); 
-  }
-  
+    })
+  }  
   async startCheckout(orderData) {
     const token = orderData.user_id;
     const cartId = orderData.cart_id;
@@ -179,12 +178,13 @@ class OrderProxy extends AbstractOrderProxy {
     };
     
     const res = await this.redisCache.findSessionWrapper(cartId);
-    options.qs.session_key = JSON.parse(res).session;
-    options.qs.customer_email = 'as_anonymous'; 
+    options.qs.session_key = JSON.parse(res).session;   
     options.qs.currency='PLN';   
     if(token) { 
       options.qs.user_id = token;
-      //TODO set -> options.qs.customer_email;
+      options.qs.customer_email = 'customer';
+    } else {
+      options.qs.customer_email = 'as_anonymous';
     }
     return  rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
@@ -212,12 +212,12 @@ class OrderProxy extends AbstractOrderProxy {
     };
     const res = await this.redisCache.findSessionWrapper(cartId);
     options.qs.session_key = JSON.parse(res).session;
-    options.qs.customer_email = 'as_anonymous';    
     if(token) { 
       options.qs.user_id = token;
-      //TODO set -> options.qs.customer_email;
+      options.qs.customer_email = 'customer';
+    } else {
+      options.qs.customer_email = 'as_anonymous';
     }
-    
     return rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
         resolve(resp.success);
@@ -241,17 +241,17 @@ class OrderProxy extends AbstractOrderProxy {
       qs: {                          
       },
       body: {
-
       }
     };
     const res = await this.redisCache.findSessionWrapper(cartId);
     options.qs.session_key = JSON.parse(res).session;
-    options.qs.customer_email = 'as_anonymous';    
     if(token) { 
       options.qs.user_id = token;
-      //TODO set -> options.qs.customer_email;
+      options.qs.customer_email = 'customer';
+    } else {
+      options.qs.customer_email = 'as_anonymous';
     }
-    
+    let shipppingName = await this.getShippingMethodNameByCode(orderData.addressInformation.shipping_method_code);
     const rawData = {
       customer: { 
         company_name: "",
@@ -269,7 +269,7 @@ class OrderProxy extends AbstractOrderProxy {
       delivery: {
         cost:0, 
         id: orderData.addressInformation.shipping_method_code,
-        name: 'Odbiór osobisty',
+        name: shipppingName,
         same_as_contact_data: true
       },
       bill:{
@@ -316,7 +316,6 @@ class OrderProxy extends AbstractOrderProxy {
         },
         json: true,
         qs: {                  
-          customer_email: email
         }
     }; 
     const order  = {
@@ -331,13 +330,29 @@ class OrderProxy extends AbstractOrderProxy {
     options.qs.session_key = JSON.parse(res).session;
     if(token) { 
       options.qs.user_id = token;
+      options.qs.customer_email = 'customer';
+    } else {
+      options.qs.customer_email = 'as_anonymous';
     }
     return  rp(options).then(function (resp) {
         return new Promise((resolve, reject) => {
-          resolve(resp.success);
+          if(resp.success) {
+            resolve({status: true});
+          } else {
+            resolve({
+              status: false,
+              message: resp.message
+            });
+          }
         });
       }).catch(function (err) {
-        console.error('Error during call orderConfirmation', err);            
+        console.error('Error during call orderConfirmation', err);      
+        return new Promise((resolve, reject) => {
+          resolve({
+            status: false,
+            message: err.error.detail
+          });
+        });       
       });
   }
 
@@ -357,10 +372,11 @@ class OrderProxy extends AbstractOrderProxy {
     }; 
     const res = await this.redisCache.findSessionWrapper(cartId);
     options.qs.session_key = JSON.parse(res).session;
-    options.qs.customer_email = 'as_anonymous';  
     if(token) { 
       options.qs.user_id = token;
-      //TODO set -> options.qs.customer_email;
+      options.qs.customer_email = 'customer';
+    } else {
+      options.qs.customer_email = 'as_anonymous';
     }
     return  rp(options).then(function (resp) {
       return new Promise((resolve, reject) => {
@@ -372,8 +388,18 @@ class OrderProxy extends AbstractOrderProxy {
         resolve(confirmation);
       });
     }).catch(function (err) {
-      console.error('Error during call orderComplate t', err);            
+      console.error('Error during call orderComplate', err);            
     }); 
+  }
+
+  async getShippingMethodNameByCode(code) {
+    const resp = await this.redisCache.getShippingMethodsWrapperAsJson(this.gci); 
+    let result = "";
+    if(Array.isArray(resp.items)) {
+      let method = resp.items.find(item => item.method_code === code);
+      result = method.method_title;
+    } 
+    return result;
   }
 }
 module.exports = OrderProxy
